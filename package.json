@@ -1,0 +1,29 @@
+{
+  "name": "agentmail",
+  "version": "0.1.0",
+  "description": "Bitcoin-powered email service for autonomous AI agents",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": [
+    "bitcoin",
+    "email",
+    "agents",
+    "ai",
+    "autonomous"
+  ],
+  "author": "cdnsoft",
+  "license": "MIT",
+  "dependencies": {
+    "bip32": "^4.0.0",
+    "bitcoinjs-lib": "^6.1.7",
+    "dotenv": "^16.4.5",
+    "ecpair": "^2.1.0",
+    "express": "^4.19.2",
+    "sql.js": "^1.14.1",
+    "tiny-secp256k1": "^2.2.3",
+    "uuid": "^9.0.1"
+  }
+}
