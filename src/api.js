@@ -72,4 +72,35 @@ router.post('/admin/charge', (req, res) => {
   res.json(result);
 });
 
+
+// Public stats for dashboard
+// GET /api/stats
+router.get('/stats', (req, res) => {
+  const db = require('./db').getDb();
+  const total = db.prepare("SELECT COUNT(*) as count FROM mailboxes WHERE deleted_at IS NULL").get();
+  const active = db.prepare("SELECT COUNT(*) as count FROM mailboxes WHERE status = 'active'").get();
+  const pending = db.prepare("SELECT COUNT(*) as count FROM mailboxes WHERE status = 'pending'").get();
+  const suspended = db.prepare("SELECT COUNT(*) as count FROM mailboxes WHERE status = 'suspended'").get();
+  const totalSats = db.prepare("SELECT COALESCE(SUM(amount_sats), 0) as total FROM payments").get();
+  const recentPayments = db.prepare("SELECT txid, amount_sats, received_at FROM payments ORDER BY received_at DESC LIMIT 5").all();
+  const recentMailboxes = db.prepare("SELECT username, email, status, created_at FROM mailboxes WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 5").all();
+
+  res.json({
+    mailboxes: {
+      total: total.count,
+      active: active.count,
+      pending: pending.count,
+      suspended: suspended.count,
+    },
+    payments: {
+      total_sats_received: totalSats.total,
+      recent: recentPayments,
+    },
+    recent_mailboxes: recentMailboxes,
+    btc_configured: isConfigured(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
 module.exports = router;
+// Oops, need to insert before module.exports — doing it via edit
