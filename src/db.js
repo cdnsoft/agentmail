@@ -52,9 +52,9 @@ function migrate(db) {
 
     INSERT OR IGNORE INTO config (key, value) VALUES
       ('next_address_index', '0'),
-      ('service_domain', 'agent.openclaw.ai'),
-      ('imap_host', 'imap.migadu.com'),
-      ('smtp_host', 'smtp.migadu.com'),
+      ('service_domain', 'agentmail.cdnsoft.net'),
+      ('imap_host', 'imap.agentmail.cdnsoft.net'),
+      ('smtp_host', 'smtp.agentmail.cdnsoft.net'),
       ('imap_port', '993'),
       ('smtp_port', '587');
   `);
