@@ -1,6 +1,7 @@
 const express = require('express');
 const { provisionMailbox, getMailbox, recordPayment, runDailyCharge } = require('./mailbox');
 const { isConfigured } = require('./bitcoin');
+const { registerMempoolWebhook } = require('./webhook');
 
 const router = express.Router();
 
@@ -17,13 +18,22 @@ router.get('/health', (req, res) => {
 // Provision a new mailbox
 // POST /api/mailboxes
 // Body: { agent_id, username }
-router.post('/mailboxes', (req, res) => {
+router.post('/mailboxes', async (req, res) => {
   const { agent_id, username } = req.body;
   if (!agent_id || !username) {
     return res.status(400).json({ error: 'agent_id and username are required' });
   }
   try {
     const result = provisionMailbox({ agentId: agent_id, username });
+
+    // Auto-register mempool.space webhook for payment detection
+    const publicUrl = process.env.PUBLIC_URL;
+    if (publicUrl && isConfigured()) {
+      registerMempoolWebhook(result.btc_address, publicUrl)
+        .then(r => console.log(`[webhook] Registered for ${result.btc_address}:`, r))
+        .catch(e => console.error(`[webhook] Registration failed:`, e.message));
+    }
+
     res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -49,7 +59,6 @@ router.post('/payments', (req, res) => {
   if (!mailbox_id || !amount_sats) {
     return res.status(400).json({ error: 'mailbox_id and amount_sats are required' });
   }
-  // Verify the mailbox exists
   const mailbox = getMailbox(mailbox_id);
   if (!mailbox) return res.status(404).json({ error: 'Mailbox not found' });
 
@@ -71,7 +80,6 @@ router.post('/admin/charge', (req, res) => {
   const result = runDailyCharge();
   res.json(result);
 });
-
 
 // Public stats for dashboard
 // GET /api/stats
@@ -103,4 +111,3 @@ router.get('/stats', (req, res) => {
 });
 
 module.exports = router;
-// Oops, need to insert before module.exports — doing it via edit
