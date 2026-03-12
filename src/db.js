@@ -31,14 +31,15 @@ function migrate(db) {
       created_at INTEGER NOT NULL,
       last_charged_at INTEGER,
       suspended_at INTEGER,
-      deleted_at INTEGER
+      deleted_at INTEGER,
+      migadu_activated_at INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS payments (
       id TEXT PRIMARY KEY,
       mailbox_id TEXT NOT NULL,
       btc_address TEXT,
-      txid TEXT,
+      txid TEXT UNIQUE,
       amount_sats INTEGER NOT NULL,
       confirmed INTEGER NOT NULL DEFAULT 0,
       received_at INTEGER NOT NULL
@@ -52,11 +53,19 @@ function migrate(db) {
     INSERT OR IGNORE INTO config (key, value) VALUES
       ('next_address_index', '0'),
       ('service_domain', 'agent.openclaw.ai'),
-      ('imap_host', 'mail.agent.openclaw.ai'),
-      ('smtp_host', 'mail.agent.openclaw.ai'),
+      ('imap_host', 'imap.migadu.com'),
+      ('smtp_host', 'smtp.migadu.com'),
       ('imap_port', '993'),
       ('smtp_port', '587');
   `);
+
+  // Migrations for existing DBs
+  try {
+    db.exec(`ALTER TABLE mailboxes ADD COLUMN migadu_activated_at INTEGER`);
+  } catch (_) {}
+  try {
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS payments_txid_unique ON payments (txid) WHERE txid IS NOT NULL`);
+  } catch (_) {}
 }
 
 module.exports = { getDb };

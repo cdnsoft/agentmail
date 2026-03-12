@@ -1,0 +1,20 @@
+[Unit]
+Description=AgentMail — Bitcoin-powered email for autonomous agents
+After=network.target
+
+[Service]
+Type=simple
+User=cypher
+WorkingDirectory=/home/cypher/Projects/agentmail
+ExecStart=/usr/bin/node index.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agentmail
+
+# Load secrets from env file — never commit this file to git
+EnvironmentFile=/home/cypher/Projects/agentmail/.env
+
+[Install]
+WantedBy=multi-user.target
