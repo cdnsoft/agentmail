@@ -21,7 +21,10 @@ app.get('/', (req, res) => {
       status: 'GET /api/mailboxes/:id',
       payment: 'POST /api/payments',
       stats: 'GET /api/stats',
-      webhook: 'POST /api/webhooks/mempool',
+      webhook: "POST /api/webhooks/mempool",
+      messages: "GET /api/mailboxes/:id/messages",
+      message: "GET /api/mailboxes/:id/messages/:uid",
+      delete_message: "DELETE /api/mailboxes/:id/messages/:uid",
     },
     docs: 'https://github.com/cdnsoft/agentmail',
   });

@@ -111,3 +111,71 @@ router.get('/stats', (req, res) => {
 });
 
 module.exports = router;
+
+// ── Message reading endpoints ────────────────────────────────────────────────
+// Agents use these to read email via HTTP instead of raw IMAP
+
+const { listMessages, getMessage, deleteMessage } = require('./imap');
+
+function requireActiveMailbox(res, mailbox) {
+  if (!mailbox) { res.status(404).json({ error: 'Mailbox not found' }); return false; }
+  if (mailbox.status !== 'active') {
+    res.status(402).json({ error: `Mailbox is ${mailbox.status} — top up Bitcoin to activate`, status: mailbox.status });
+    return false;
+  }
+  return true;
+}
+
+// GET /api/mailboxes/:id/messages
+// List recent inbox messages (no body). Query: ?limit=20
+router.get('/mailboxes/:id/messages', async (req, res) => {
+  const mailbox = getMailbox(req.params.id);
+  if (!requireActiveMailbox(res, mailbox)) return;
+
+  const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+
+  try {
+    const messages = await listMessages(mailbox, limit);
+    res.json({ messages, count: messages.length, mailbox_id: mailbox.id, email: mailbox.email });
+  } catch (err) {
+    console.error('[imap] listMessages error:', err.message);
+    res.status(502).json({ error: 'Failed to fetch messages', detail: err.message });
+  }
+});
+
+// GET /api/mailboxes/:id/messages/:uid
+// Fetch full message content by UID (marks as read)
+router.get('/mailboxes/:id/messages/:uid', async (req, res) => {
+  const mailbox = getMailbox(req.params.id);
+  if (!requireActiveMailbox(res, mailbox)) return;
+
+  const uid = parseInt(req.params.uid);
+  if (!uid) return res.status(400).json({ error: 'Invalid UID' });
+
+  try {
+    const msg = await getMessage(mailbox, uid);
+    if (!msg) return res.status(404).json({ error: 'Message not found' });
+    res.json(msg);
+  } catch (err) {
+    console.error('[imap] getMessage error:', err.message);
+    res.status(502).json({ error: 'Failed to fetch message', detail: err.message });
+  }
+});
+
+// DELETE /api/mailboxes/:id/messages/:uid
+// Delete a message
+router.delete('/mailboxes/:id/messages/:uid', async (req, res) => {
+  const mailbox = getMailbox(req.params.id);
+  if (!requireActiveMailbox(res, mailbox)) return;
+
+  const uid = parseInt(req.params.uid);
+  if (!uid) return res.status(400).json({ error: 'Invalid UID' });
+
+  try {
+    const result = await deleteMessage(mailbox, uid);
+    res.json(result);
+  } catch (err) {
+    console.error('[imap] deleteMessage error:', err.message);
+    res.status(502).json({ error: 'Failed to delete message', detail: err.message });
+  }
+});
