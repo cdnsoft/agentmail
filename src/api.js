@@ -110,7 +110,6 @@ router.get('/stats', (req, res) => {
   });
 });
 
-module.exports = router;
 
 // ── Message reading endpoints ────────────────────────────────────────────────
 // Agents use these to read email via HTTP instead of raw IMAP
@@ -179,3 +178,27 @@ router.delete('/mailboxes/:id/messages/:uid', async (req, res) => {
     res.status(502).json({ error: 'Failed to delete message', detail: err.message });
   }
 });
+
+// POST /api/mailboxes/:id/messages
+// Send an email from this mailbox
+// Body: { to, subject, text, html, cc, bcc, replyTo }
+// Requires active mailbox (paid / credits > 0)
+const { sendMessage } = require('./smtp');
+
+router.post('/mailboxes/:id/messages', async (req, res) => {
+  const mailbox = getMailbox(req.params.id);
+  if (requireActiveMailbox(res, mailbox) === false) return;
+
+  const { to, subject, text, html, cc, bcc, replyTo } = req.body;
+  if (!to) return res.status(400).json({ error: 'to is required' });
+
+  try {
+    const result = await sendMessage(mailbox, { to, subject, text, html, cc, bcc, replyTo });
+    res.status(201).json(result);
+  } catch (err) {
+    console.error('[smtp] sendMessage error:', err.message);
+    res.status(502).json({ error: 'Failed to send message', detail: err.message });
+  }
+});
+
+module.exports = router;
