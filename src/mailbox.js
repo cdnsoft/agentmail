@@ -52,6 +52,8 @@ function provisionMailbox({ agentId, username }) {
     password,
     btc_address: btcAddress,
     daily_cost_sats: 10,
+    activation_threshold_sats: 300,
+    credit_sats: 0,
     status: 'pending',
     imap: { host: imapHost, port: 993, ssl: true },
     smtp: { host: smtpHost, port: 587, starttls: true },

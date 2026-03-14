@@ -1,9 +1,29 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
+
 const { provisionMailbox, getMailbox, recordPayment, runDailyCharge } = require('./mailbox');
 const { isConfigured } = require('./bitcoin');
 const { registerMempoolWebhook } = require('./webhook');
 
 const router = express.Router();
+
+// Rate limiters
+const sendRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 50, // 50 emails per IP per hour
+  message: { error: 'Send rate limit exceeded. Max 50 emails per hour.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const provisionRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // 10 new mailboxes per IP per hour
+  message: { error: 'Provisioning rate limit exceeded. Max 10 mailboxes per hour per IP.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 
 // Health check
 router.get('/health', (req, res) => {
@@ -18,7 +38,7 @@ router.get('/health', (req, res) => {
 // Provision a new mailbox
 // POST /api/mailboxes
 // Body: { agent_id, username }
-router.post('/mailboxes', async (req, res) => {
+router.post('/mailboxes', provisionRateLimit, async (req, res) => {
   const { agent_id, username } = req.body;
   if (!agent_id || !username) {
     return res.status(400).json({ error: 'agent_id and username are required' });
@@ -47,8 +67,8 @@ router.get('/mailboxes/:id', (req, res) => {
   if (!mailbox) return res.status(404).json({ error: 'Mailbox not found' });
 
   // Don't expose password in status check
-  const { password: _, ...safe } = mailbox;
-  res.json(safe);
+  const { password: _, credits_sats, ...safe } = mailbox;
+  res.json({ ...safe, credit_sats: credits_sats });
 });
 
 // Record a Bitcoin payment (webhook / manual top-up)
