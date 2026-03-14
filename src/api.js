@@ -125,11 +125,28 @@ function requireActiveMailbox(res, mailbox) {
   return true;
 }
 
+
+// Authenticate agent by mailbox password (Bearer token or X-Mailbox-Password header)
+function requireMailboxAuth(req, res, mailbox) {
+  const auth = req.headers['authorization'];
+  const headerPw = req.headers['x-mailbox-password'];
+  let provided = headerPw;
+  if (!provided && auth && auth.startsWith('Bearer ')) {
+    provided = auth.slice(7);
+  }
+  if (!provided || provided !== mailbox.password) {
+    res.status(401).json({ error: 'Unauthorized — provide mailbox password via Authorization: Bearer <password> or X-Mailbox-Password header' });
+    return false;
+  }
+  return true;
+}
+
 // GET /api/mailboxes/:id/messages
 // List recent inbox messages (no body). Query: ?limit=20
 router.get('/mailboxes/:id/messages', async (req, res) => {
   const mailbox = getMailbox(req.params.id);
   if (!requireActiveMailbox(res, mailbox)) return;
+  if (requireMailboxAuth(req, res, mailbox) === false) return;
 
   const limit = Math.min(parseInt(req.query.limit) || 20, 100);
 
@@ -147,6 +164,7 @@ router.get('/mailboxes/:id/messages', async (req, res) => {
 router.get('/mailboxes/:id/messages/:uid', async (req, res) => {
   const mailbox = getMailbox(req.params.id);
   if (!requireActiveMailbox(res, mailbox)) return;
+  if (requireMailboxAuth(req, res, mailbox) === false) return;
 
   const uid = parseInt(req.params.uid);
   if (!uid) return res.status(400).json({ error: 'Invalid UID' });
@@ -188,6 +206,7 @@ const { sendMessage } = require('./smtp');
 router.post('/mailboxes/:id/messages', async (req, res) => {
   const mailbox = getMailbox(req.params.id);
   if (requireActiveMailbox(res, mailbox) === false) return;
+  if (requireMailboxAuth(req, res, mailbox) === false) return;
 
   const { to, subject, text, html, cc, bcc, replyTo } = req.body;
   if (!to) return res.status(400).json({ error: 'to is required' });

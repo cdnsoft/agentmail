@@ -36,3 +36,18 @@ app.listen(PORT, () => {
   console.log(`Bitcoin configured: ${require('./src/bitcoin').isConfigured()}`);
   console.log(`Public URL: ${process.env.PUBLIC_URL || '(not set — webhooks disabled)'}`);
 });
+
+// Auto daily charge — run at startup and every 24h
+const { runDailyCharge } = require('./src/mailbox');
+function scheduleDailyCharge() {
+  console.log('[scheduler] Running daily charge cycle...');
+  try {
+    const result = runDailyCharge();
+    console.log(`[scheduler] Charged ${result.charged} mailboxes, suspended ${result.suspended}`);
+  } catch (err) {
+    console.error('[scheduler] Daily charge failed:', err.message);
+  }
+}
+// Run once at startup (small delay), then every 24h
+setTimeout(scheduleDailyCharge, 5000);
+setInterval(scheduleDailyCharge, 24 * 60 * 60 * 1000);
