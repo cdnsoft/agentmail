@@ -1,36 +1,47 @@
 /**
  * IMAP message fetching for AgentMail
- * Allows agents to read their inbox via HTTP API instead of raw IMAP
+ * Allows agents to read their inbox via HTTP API instead of raw IMAP.
+ *
+ * When Migadu is configured: connects to imap.migadu.com
+ * When not configured: reads from local DB inbox (populated via inbound webhook or inject API)
  */
 
 const { ImapFlow } = require('imapflow');
 
-function getImapConfig(mailbox) {
-  // Use Migadu endpoints if configured, otherwise fall back to env
-  const host = process.env.MIGADU_DOMAIN
-    ? 'imap.migadu.com'
-    : (process.env.IMAP_HOST || 'localhost');
+function isMigaduConfigured() {
+  return !!(process.env.MIGADU_USER && process.env.MIGADU_KEY && process.env.MIGADU_DOMAIN);
+}
 
+// ─── DB Inbox fallback ────────────────────────────────────────────────────────
+
+const dbInbox = require('./inbox');
+
+async function listMessagesFromDb(mailbox, limit) {
+  return dbInbox.listMessages(mailbox.id, limit);
+}
+
+async function getMessageFromDb(mailbox, uid) {
+  return dbInbox.getMessage(mailbox.id, uid);
+}
+
+async function deleteMessageFromDb(mailbox, uid) {
+  return dbInbox.deleteMessage(mailbox.id, uid);
+}
+
+// ─── IMAP (Migadu) ────────────────────────────────────────────────────────────
+
+function getImapConfig(mailbox) {
   return {
-    host,
+    host: 'imap.migadu.com',
     port: 993,
     secure: true,
-    auth: {
-      user: mailbox.email,
-      pass: mailbox.password,
-    },
+    auth: { user: mailbox.email, pass: mailbox.password },
     logger: false,
     tls: { rejectUnauthorized: true },
   };
 }
 
-/**
- * List recent messages from a mailbox inbox.
- * Returns array of message summaries (no body).
- * @param {object} mailbox - mailbox record from DB
- * @param {number} limit - max messages to return (default 20)
- */
-async function listMessages(mailbox, limit = 20) {
+async function listMessagesFromImap(mailbox, limit = 20) {
   const client = new ImapFlow(getImapConfig(mailbox));
   const messages = [];
 
@@ -39,18 +50,13 @@ async function listMessages(mailbox, limit = 20) {
     const lock = await client.getMailboxLock('INBOX');
 
     try {
-      // Fetch last N messages
       const total = client.mailbox.exists;
       if (total === 0) return [];
-
       const start = Math.max(1, total - limit + 1);
       const range = `${start}:${total}`;
 
       for await (const msg of client.fetch(range, {
-        uid: true,
-        flags: true,
-        envelope: true,
-        size: true,
+        uid: true, flags: true, envelope: true, size: true,
       })) {
         messages.unshift({
           uid: msg.uid,
@@ -77,11 +83,7 @@ async function listMessages(mailbox, limit = 20) {
   return messages;
 }
 
-/**
- * Fetch full message content by UID.
- * Returns { headers, text, html, attachments[] }
- */
-async function getMessage(mailbox, uid) {
+async function getMessageFromImap(mailbox, uid) {
   const client = new ImapFlow(getImapConfig(mailbox));
 
   try {
@@ -91,16 +93,11 @@ async function getMessage(mailbox, uid) {
 
     try {
       const msg = await client.fetchOne(`${uid}`, {
-        uid: true,
-        flags: true,
-        envelope: true,
-        bodyStructure: true,
-        source: true,
+        uid: true, flags: true, envelope: true, bodyStructure: true, source: true,
       }, { uid: true });
 
       if (!msg) return null;
 
-      // Parse raw source into usable parts
       const source = msg.source.toString('utf8');
       const { simpleParser } = await import('mailparser').catch(() => ({ simpleParser: null }));
 
@@ -117,13 +114,10 @@ async function getMessage(mailbox, uid) {
           flags: [...(msg.flags || [])],
           seen: msg.flags?.has('\\Seen') || false,
           attachments: (parsed.attachments || []).map(a => ({
-            filename: a.filename,
-            contentType: a.contentType,
-            size: a.size,
+            filename: a.filename, contentType: a.contentType, size: a.size,
           })),
         };
       } else {
-        // Fallback: return raw source if mailparser not available
         result = {
           uid: msg.uid,
           subject: msg.envelope?.subject || '(no subject)',
@@ -136,7 +130,6 @@ async function getMessage(mailbox, uid) {
         };
       }
 
-      // Mark as read
       await client.messageFlagsAdd(`${uid}`, ['\\Seen'], { uid: true });
     } finally {
       lock.release();
@@ -150,10 +143,7 @@ async function getMessage(mailbox, uid) {
   }
 }
 
-/**
- * Delete a message by UID (move to Trash / expunge).
- */
-async function deleteMessage(mailbox, uid) {
+async function deleteMessageFromImap(mailbox, uid) {
   const client = new ImapFlow(getImapConfig(mailbox));
 
   try {
@@ -172,6 +162,23 @@ async function deleteMessage(mailbox, uid) {
     await client.close().catch(() => {});
     throw err;
   }
+}
+
+// ─── Public API (auto-selects backend) ───────────────────────────────────────
+
+async function listMessages(mailbox, limit = 20) {
+  if (isMigaduConfigured()) return listMessagesFromImap(mailbox, limit);
+  return listMessagesFromDb(mailbox, limit);
+}
+
+async function getMessage(mailbox, uid) {
+  if (isMigaduConfigured()) return getMessageFromImap(mailbox, uid);
+  return getMessageFromDb(mailbox, uid);
+}
+
+async function deleteMessage(mailbox, uid) {
+  if (isMigaduConfigured()) return deleteMessageFromImap(mailbox, uid);
+  return deleteMessageFromDb(mailbox, uid);
 }
 
 module.exports = { listMessages, getMessage, deleteMessage };

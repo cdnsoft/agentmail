@@ -240,4 +240,76 @@ router.post('/mailboxes/:id/messages', async (req, res) => {
   }
 });
 
+// ─── Inbound email webhook ────────────────────────────────────────────────────
+// POST /api/inbound
+// Generic inbound email webhook. Any SMTP relay (Brevo, Mailgun, etc.) can POST here.
+// Body: { to, from, subject, text, html, headers? }
+// Optionally secured by INBOUND_WEBHOOK_SECRET env var.
+
+const { storeMessage } = require('./inbox');
+
+router.post('/inbound', async (req, res) => {
+  const secret = process.env.INBOUND_WEBHOOK_SECRET;
+  if (secret) {
+    const auth = req.headers['x-webhook-secret'] || req.headers['authorization']?.replace('Bearer ', '');
+    if (auth !== secret) return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { to, from, subject, text, html, headers } = req.body;
+  if (!to) return res.status(400).json({ error: 'to is required' });
+
+  // Find mailbox by email address
+  const db = require('./db').getDb();
+  const toAddr = Array.isArray(to) ? to[0] : to;
+  const email = typeof toAddr === 'string' ? toAddr.toLowerCase().trim() : toAddr?.address?.toLowerCase();
+
+  const mailbox = db.prepare('SELECT * FROM mailboxes WHERE LOWER(email) = ?').get(email);
+  if (!mailbox) {
+    console.warn(`[inbound] No mailbox found for: ${email}`);
+    return res.status(404).json({ error: `No mailbox found for ${email}` });
+  }
+
+  const stored = storeMessage(mailbox.id, {
+    subject: subject || '(no subject)',
+    from: typeof from === 'string' ? from : (from?.address || from?.email || ''),
+    to: email,
+    text: text || null,
+    html: html || null,
+    headers: headers || null,
+    received_at: Math.floor(Date.now() / 1000),
+  });
+
+  console.log(`[inbound] Stored message uid=${stored.uid} for ${email}`);
+  res.status(201).json({ uid: stored.uid, mailbox_id: mailbox.id });
+});
+
+// ─── Admin: inject test message ───────────────────────────────────────────────
+// POST /api/admin/mailboxes/:id/inject
+// Injects a test message directly into a mailbox DB inbox. Dev/testing only.
+// Secured by ADMIN_SECRET env var.
+
+router.post('/admin/mailboxes/:id/inject', (req, res) => {
+  const adminSecret = process.env.ADMIN_SECRET;
+  if (adminSecret) {
+    const auth = req.headers['x-admin-secret'] || req.headers['authorization']?.replace('Bearer ', '');
+    if (auth !== adminSecret) return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const mailbox = getMailbox(req.params.id);
+  if (!mailbox) return res.status(404).json({ error: 'Mailbox not found' });
+
+  const { subject, from, text, html } = req.body;
+  const stored = storeMessage(mailbox.id, {
+    subject: subject || 'Test message',
+    from: from || 'test@example.com',
+    to: mailbox.email,
+    text: text || 'This is a test message injected via admin API.',
+    html: html || null,
+    received_at: Math.floor(Date.now() / 1000),
+  });
+
+  console.log(`[admin] Injected test message uid=${stored.uid} into mailbox ${mailbox.id}`);
+  res.status(201).json({ uid: stored.uid, mailbox_id: mailbox.id, email: mailbox.email });
+});
+
 module.exports = router;
