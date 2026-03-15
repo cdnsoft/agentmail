@@ -27,6 +27,7 @@
     "imapflow": "^1.2.13",
     "mailparser": "^3.9.4",
     "nodemailer": "^8.0.2",
+    "smtp-server": "^3.18.1",
     "sql.js": "^1.14.1",
     "tiny-secp256k1": "^2.2.3",
     "uuid": "^9.0.1"

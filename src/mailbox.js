@@ -173,4 +173,9 @@ function runDailyCharge() {
   return { charged, suspended, deleted: toDelete.length };
 }
 
-module.exports = { provisionMailbox, getMailbox, recordPayment, reactivateMailbox, runDailyCharge };
+module.exports = { provisionMailbox, getMailbox, getMailboxByEmail, recordPayment, reactivateMailbox, runDailyCharge };
+
+function getMailboxByEmail(email) {
+  const db = getDb();
+  return db.prepare("SELECT * FROM mailboxes WHERE email = ? AND status != 'deleted'").get(email.toLowerCase());
+}

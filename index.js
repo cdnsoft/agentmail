@@ -51,3 +51,9 @@ function scheduleDailyCharge() {
 // Run once at startup (small delay), then every 24h
 setTimeout(scheduleDailyCharge, 5000);
 setInterval(scheduleDailyCharge, 24 * 60 * 60 * 1000);
+
+// Inbound SMTP server — start when SMTP_INBOUND=true
+if (process.env.SMTP_INBOUND === 'true') {
+  const { startSmtpServer } = require('./src/smtpd');
+  startSmtpServer();
+}

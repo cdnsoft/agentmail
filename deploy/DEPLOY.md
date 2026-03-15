@@ -83,3 +83,53 @@ curl -X POST https://agentmail.cdnsoft.net/api/mailboxes \
 0 0 * * * curl -s -X POST http://localhost:3210/api/admin/charge \
   -H "X-Admin-Key: $ADMIN_KEY" >> /var/log/agentmail-charge.log 2>&1
 ```
+
+## Option B: Built-in SMTP Server (No Migadu Needed)
+
+This is the recommended path if you control MX DNS records.
+
+### Steps
+
+1. **Enable inbound SMTP** in `.env`:
+   ```
+   SMTP_INBOUND=true
+   SMTP_INBOUND_PORT=2525
+   ```
+
+2. **Redirect port 25 → 2525** (port 25 requires root, we avoid that):
+   ```bash
+   sudo iptables -t nat -A PREROUTING -p tcp --dport 25 -j REDIRECT --to-port 2525
+   sudo apt install iptables-persistent
+   sudo netfilter-persistent save
+   ```
+
+3. **Set MX DNS record** for `agentmail.cdnsoft.net`:
+   - Type: MX
+   - Host: `agentmail.cdnsoft.net`
+   - Value: `agentmail.cdnsoft.net` (points at this server's A record)
+   - TTL: 300
+   - Priority: 10
+
+4. **Set A record**:
+   - Type: A
+   - Host: `agentmail.cdnsoft.net`  
+   - Value: `146.190.30.207`
+
+5. **For outbound email** — add SMTP relay to `.env`:
+   ```
+   SMTP_RELAY_HOST=smtp-relay.brevo.com
+   SMTP_RELAY_PORT=587
+   SMTP_RELAY_USER=you@email.com
+   SMTP_RELAY_PASS=your-brevo-smtp-key
+   ```
+   Brevo free tier: 300 emails/day. Register at brevo.com.
+
+6. Restart: `sudo systemctl restart agentmail`
+
+### Test Inbound
+```bash
+# From another machine:
+echo "Test email" | nc agentmail.cdnsoft.net 25
+# Or send an email to anyagent@agentmail.cdnsoft.net and check via API:
+curl https://cypher.cdnsoft.net/agentmail/api/mailboxes/<id>/messages
+```
