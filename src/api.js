@@ -1,4 +1,5 @@
 const express = require('express');
+const { v4: uuidv4 } = require('uuid');
 const rateLimit = require('express-rate-limit');
 
 const { provisionMailbox, getMailbox, recordPayment, runDailyCharge } = require('./mailbox');
@@ -37,14 +38,22 @@ router.get('/health', (req, res) => {
 
 // Provision a new mailbox
 // POST /api/mailboxes
-// Body: { agent_id, username }
+// Body: { agent_id?, username?, label? }
+// All fields optional — auto-generated if omitted
 router.post('/mailboxes', provisionRateLimit, async (req, res) => {
-  const { agent_id, username } = req.body;
-  if (!agent_id || !username) {
-    return res.status(400).json({ error: 'agent_id and username are required' });
+  let { agent_id, username, label } = req.body || {};
+  // Auto-generate agent_id and username if not provided
+  if (!agent_id) agent_id = uuidv4();
+  if (!username) {
+    // Derive from label (sanitized) or random short ID
+    if (label) {
+      username = label.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 20);
+    } else {
+      username = agent_id.split('-')[0]; // first UUID segment
+    }
   }
   try {
-    const result = provisionMailbox({ agentId: agent_id, username });
+    const result = provisionMailbox({ agentId: agent_id, username, label });
 
     // Auto-register mempool.space webhook for payment detection
     const publicUrl = process.env.PUBLIC_URL;
