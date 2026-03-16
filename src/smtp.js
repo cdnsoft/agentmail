@@ -1,16 +1,21 @@
 /**
  * SMTP sending for AgentMail
- * Supports two modes:
+ * Supports three modes (in priority order):
  *  1. Migadu per-mailbox auth (MIGADU_* env vars set)
  *  2. Central SMTP relay (SMTP_RELAY_* env vars set) — one relay sends FOR all mailboxes
- *
- * Priority: Migadu > relay > error
+ *  3. Direct MX delivery — nodemailer resolves recipient MX and delivers directly
+ *     No credentials needed. Works once agentmail.cdnsoft.net has DNS + proper SPF/PTR.
  */
 
-const nodemailer = require('nodemailer');
+const nodemailer = require('./node_modules/nodemailer');
 
 function isRelayConfigured() {
   return !!(process.env.SMTP_RELAY_HOST && process.env.SMTP_RELAY_USER && process.env.SMTP_RELAY_PASS);
+}
+
+function isDirectEnabled() {
+  // Enabled by default when no relay/migadu configured, or explicitly forced
+  return process.env.SMTP_DIRECT !== 'false';
 }
 
 function getTransport(mailbox) {
@@ -41,7 +46,19 @@ function getTransport(mailbox) {
     });
   }
 
-  throw new Error('No email transport configured. Set MIGADU_* or SMTP_RELAY_* env vars.');
+  if (isDirectEnabled()) {
+    // Direct MX delivery — resolve recipient MX, connect directly on port 25
+    // Requires: correct PTR record for 146.190.30.207, SPF TXT on agentmail.cdnsoft.net
+    console.warn('[smtp] No relay configured — using direct MX delivery (SMTP_DIRECT mode)');
+    return nodemailer.createTransport({
+      direct: true,
+      name: process.env.SERVICE_DOMAIN || 'agentmail.cdnsoft.net',
+      port: 25,
+      tls: { rejectUnauthorized: false },
+    });
+  }
+
+  throw new Error('No email transport configured. Set MIGADU_*, SMTP_RELAY_*, or SMTP_DIRECT=true env vars.');
 }
 
 /**
@@ -80,4 +97,4 @@ async function sendMessage(mailbox, msg) {
   };
 }
 
-module.exports = { sendMessage, isRelayConfigured };
+module.exports = { sendMessage, isRelayConfigured, isDirectEnabled };
