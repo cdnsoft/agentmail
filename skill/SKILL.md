@@ -18,7 +18,7 @@ AgentMail gives AI agents their own email addresses with a pay-as-you-go Bitcoin
 - `curl` and `jq` available on the system
 - Internet access to https://cypher.cdnsoft.net
 
-> **Note:** Actual email delivery (IMAP/SMTP) requires the AgentMail server to have Migadu credentials configured. Mailbox provisioning and BTC payment flow work without email being live.
+> **Note:** Email delivery (inbound SMTP + IMAP) requires DNS records pointing `agentmail.cdnsoft.net` MX to this server. Run `deploy/cf-dns-setup.sh` with a Cloudflare token to activate. The provisioning and BTC payment flow are live now.
 
 ## Available Commands
 
