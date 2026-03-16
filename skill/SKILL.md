@@ -41,7 +41,7 @@ Check mailbox status, credit balance, and whether email is active.
 ```
 
 ### `list.sh <mailbox_id>`
-List messages in the inbox (requires active mailbox with Migadu configured).
+List messages in the inbox (requires active mailbox with credits and DNS configured).
 
 ```bash
 ./scripts/list.sh abc123
