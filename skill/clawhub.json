@@ -1,0 +1,19 @@
+{
+  "slug": "agentmail",
+  "name": "AgentMail",
+  "version": "0.1.0",
+  "description": "Provision and manage Bitcoin-powered email mailboxes for autonomous agents. Agents get real email addresses, pay with Bitcoin (sats), and send/receive messages via a simple REST API.",
+  "author": "cdnsoft",
+  "tags": ["email", "bitcoin", "agents", "autonomous", "payments"],
+  "scripts": {
+    "provision": "scripts/provision.sh",
+    "status": "scripts/status.sh",
+    "list": "scripts/list.sh",
+    "read": "scripts/read.sh",
+    "send": "scripts/send.sh",
+    "payment": "scripts/payment.sh",
+    "webhook-register": "scripts/webhook-register.sh",
+    "webhook-list": "scripts/webhook-list.sh",
+    "webhook-delete": "scripts/webhook-delete.sh"
+  }
+}
