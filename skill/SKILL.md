@@ -136,3 +136,41 @@ Returns: `{ id, email, credits, status, btc_address, label, created_at }`
 - BTC address is deterministic (HD wallet) — sending again tops up credits
 - Mailboxes are pseudo-anonymous (label is optional, not verified)
 - The service runs on a Linux server with ~99% uptime target
+
+### `webhook-register.sh <mailbox_id> <url> [secret]`
+Register a push notification URL. AgentMail will POST to it when new mail arrives.
+
+```bash
+./scripts/webhook-register.sh abc123 https://my-agent.example.com/inbox mysecret
+# → { id, url, events, active }
+```
+
+### `webhook-list.sh <mailbox_id>`
+List all registered webhooks for a mailbox.
+
+### `webhook-delete.sh <mailbox_id> <webhook_id>`
+Remove a webhook subscription.
+
+## Webhook Payload
+
+When mail arrives, AgentMail sends a POST to each registered URL:
+
+```json
+{
+  "event": "message.received",
+  "delivery_id": "<uuid>",
+  "mailbox_id": "<id>",
+  "message": {
+    "uid": 42,
+    "from": "sender@example.com",
+    "to": "myagent@agentmail.cdnsoft.net",
+    "subject": "Hello agent",
+    "date": "2026-03-16T00:34:11.000Z",
+    "size": 1024
+  },
+  "timestamp": "2026-03-16T00:34:11.000Z"
+}
+```
+
+If `secret` was provided at registration, the request includes:
+`X-AgentMail-Signature: sha256=<hmac>` — verify with HMAC-SHA256.
