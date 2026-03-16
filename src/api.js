@@ -322,3 +322,63 @@ router.post('/admin/mailboxes/:id/inject', (req, res) => {
 });
 
 module.exports = router;
+
+
+// ── Agent Webhook Subscriptions ───────────────────────────────────────────────
+// Agents register callback URLs to get push-notified on new mail
+
+const { registerWebhook, listWebhooks, deleteWebhook } = require('./webhooks');
+const { v4: uuidv4Wh } = require('uuid');
+
+// POST /api/mailboxes/:id/webhooks
+// Body: { url, secret?, events? }
+router.post('/mailboxes/:id/webhooks', async (req, res) => {
+  const mailbox = getMailbox(req.params.id);
+  if (!mailbox) return res.status(404).json({ error: 'Mailbox not found' });
+  if (!requireMailboxAuth(req, res, mailbox)) return;
+
+  const { url, secret, events } = req.body || {};
+  if (!url) return res.status(400).json({ error: 'url is required' });
+
+  try {
+    const wh = registerWebhook({
+      id: uuidv4Wh(),
+      mailboxId: mailbox.id,
+      url,
+      secret,
+      events: events || ['message.received'],
+    });
+    res.status(201).json(wh);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/mailboxes/:id/webhooks
+router.get('/mailboxes/:id/webhooks', (req, res) => {
+  const mailbox = getMailbox(req.params.id);
+  if (!mailbox) return res.status(404).json({ error: 'Mailbox not found' });
+  if (!requireMailboxAuth(req, res, mailbox)) return;
+
+  const hooks = listWebhooks(mailbox.id).map(h => ({
+    id: h.id,
+    url: h.url,
+    events: h.events.split(','),
+    active: h.active === 1,
+    created_at: new Date(h.created_at * 1000).toISOString(),
+    last_fired_at: h.last_fired_at ? new Date(h.last_fired_at * 1000).toISOString() : null,
+    failure_count: h.failure_count,
+  }));
+  res.json({ webhooks: hooks, count: hooks.length });
+});
+
+// DELETE /api/mailboxes/:id/webhooks/:wid
+router.delete('/mailboxes/:id/webhooks/:wid', (req, res) => {
+  const mailbox = getMailbox(req.params.id);
+  if (!mailbox) return res.status(404).json({ error: 'Mailbox not found' });
+  if (!requireMailboxAuth(req, res, mailbox)) return;
+
+  const ok = deleteWebhook(req.params.wid, mailbox.id);
+  if (!ok) return res.status(404).json({ error: 'Webhook not found' });
+  res.json({ deleted: true });
+});

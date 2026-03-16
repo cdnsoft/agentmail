@@ -7,7 +7,7 @@
  *     No credentials needed. Works once agentmail.cdnsoft.net has DNS + proper SPF/PTR.
  */
 
-const nodemailer = require('./node_modules/nodemailer');
+const nodemailer = require('nodemailer');
 
 function isRelayConfigured() {
   return !!(process.env.SMTP_RELAY_HOST && process.env.SMTP_RELAY_USER && process.env.SMTP_RELAY_PASS);

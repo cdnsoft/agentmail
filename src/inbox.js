@@ -9,6 +9,7 @@
  */
 
 const { getDb } = require('./db');
+const { notifyNewMessage } = require('./webhooks');
 
 function ensureInboxTable() {
   const db = getDb();
@@ -60,6 +61,9 @@ function storeMessage(mailboxId, msg) {
     msg.html || null,
     msg.headers ? JSON.stringify(msg.headers) : null,
   );
+
+  // Fire agent webhooks (non-blocking)
+  try { notifyNewMessage(mailboxId, { uid, ...msg }); } catch (_) {}
 
   return { uid, ...msg };
 }
