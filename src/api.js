@@ -382,3 +382,35 @@ router.delete('/mailboxes/:id/webhooks/:wid', (req, res) => {
   if (!ok) return res.status(404).json({ error: 'Webhook not found' });
   res.json({ deleted: true });
 });
+
+// DELETE /api/mailboxes/:id  (admin or authenticated owner)
+router.delete('/mailboxes/:id', (req, res) => {
+  const adminKey = req.headers['x-admin-key'];
+  const isAdmin = adminKey && adminKey === process.env.ADMIN_KEY;
+
+  const mailbox = getMailbox(req.params.id);
+  if (!mailbox) return res.status(404).json({ error: 'Mailbox not found' });
+
+  if (!isAdmin) {
+    if (!requireMailboxAuth(req, res, mailbox)) return;
+  }
+
+  const db = require('./db').getDb();
+  db.prepare("UPDATE mailboxes SET deleted_at = ? WHERE id = ?").run(Date.now(), mailbox.id);
+  console.log(`[api] Deleted mailbox ${mailbox.id} (${mailbox.email})`);
+  res.json({ deleted: true, id: mailbox.id, email: mailbox.email });
+});
+
+// POST /api/admin/topup  — Add credits to a mailbox for testing/admin
+router.post('/admin/topup', (req, res) => {
+  const adminKey = req.headers['x-admin-key'];
+  if (adminKey !== process.env.ADMIN_KEY) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  const { mailbox_id, amount_sats } = req.body;
+  if (!mailbox_id || !amount_sats) return res.status(400).json({ error: 'mailbox_id and amount_sats required' });
+  const mailbox = getMailbox(mailbox_id);
+  if (!mailbox) return res.status(404).json({ error: 'Mailbox not found' });
+  const result = recordPayment({ mailboxId: mailbox_id, btcAddress: mailbox.btc_address, txid: 'admin_topup_' + Date.now(), amountSats: amount_sats });
+  res.json(result);
+});
